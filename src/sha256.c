@@ -13,10 +13,12 @@ static const uint32_t K[64] = {
     0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
 };
 
+
 // bitwise right rotation 32-bit integer x by n positions
 static uint32_t rotr(uint32_t x, uint32_t n) {
     return (x >> n) | (x << (32-n));
 }
+
 
 static void sha256_transform(sha256_ctx *ctx, const uint8_t block[64]) {
     uint32_t w[64];
@@ -64,4 +66,68 @@ static void sha256_transform(sha256_ctx *ctx, const uint8_t block[64]) {
     // add the value in the original state
     ctx->state[0] += a; ctx->state[1] += b; ctx->state[2] += c; ctx->state[3] += d;
     ctx->state[4] += e; ctx->state[5] += f; ctx->state[6] += g; ctx->state[7] += h;
+}
+
+// fractional part of suqare roots of first 8 prime numbers (2, 3, 5, 7, 11, 13, 17, 19)
+void sha256_init(sha256_ctx *ctx) {
+    ctx->state[0] = 0x6a09e667; ctx->state[1] = 0xbb67ae85;
+    ctx->state[2] = 0x3c6ef372; ctx->state[3] = 0xa54ff53a;
+    ctx->state[4] = 0x510e527f; ctx->state[5] = 0x9b05688c;
+    ctx->state[6] = 0x1f83d9ab; ctx->state[7] = 0x5be0cd19;
+    ctx->bitlen = 0;
+    ctx->buflen = 0;
+}
+
+
+// every 64 bytes, call sha256_transform
+void sha256_update(sha256_ctx *ctx, const uint8_t *data, size_t len) {
+    // track total message length in bits (used later for padding in sha256_final)
+    ctx->bitlen += (uint64_t)len * 8;
+
+    while (len > 0) {
+        // how many byte left in the buffer
+        size_t n = 64 - ctx->buflen;
+        if (n > len) n = len;
+        // copy n right after from current empty position
+        memcpy(ctx->buffer + ctx->buflen, data, n);
+        ctx->buflen += n; // how many buffer
+        data += n;        // go forward the pointer to the data that is not copied yet
+        len -= n;         // reduce the amount of length that is not copied yet
+
+        // call sha256_transform every 64 bytes & reset buffer
+        if (ctx->buflen == 64) {
+            sha256_transform(ctx, ctx->buffer);
+            ctx->buflen = 0;
+        }
+    }
+}
+
+// for the last leftover buffer
+void sha256_final(sha256_ctx *ctx, uint8_t digest[SHA256_DIGEST_SIZE]) {
+    uint64_t bitlen = ctx->bitlen;
+    uint8_t pad = 0x80; // == 10000000
+    sha256_update(ctx, &pad, 1); // add the flag number (pad) in the last of the data
+    uint8_t zero = 0x00;
+    while (ctx->buflen != 56) { // 56 = 64 - 8(reserve 8 bytes for the length field, written later)
+        sha256_update(ctx, &zero, 1);
+    }
+
+    // transform bitlen(64 bits) -> 8 bytes big-endian
+    uint8_t lenbytes[8];
+    for (int i = 0; i < 8; i++) {
+        lenbytes[i] = (uint8_t)(bitlen >> (56 - 8 * i));
+    }
+
+    // store the 8 bytes big-endian from 56 bytes-th
+    memcpy(ctx->buffer + ctx->buflen, lenbytes, 8);
+    ctx->buflen += 8;
+    sha256_transform(ctx, ctx->buffer);
+
+    // 8 * 32bits -> 32 bytes big-endian
+    for (int i = 0; i < 8; i++) {
+        digest[i * 4]     = (uint8_t)(ctx->state[i] >> 24);
+        digest[i * 4 + 1] = (uint8_t)(ctx->state[i] >> 16);
+        digest[i * 4 + 2] = (uint8_t)(ctx->state[i] >> 8);
+        digest[i * 4 + 3] = (uint8_t)(ctx->state[i]);
+    }
 }

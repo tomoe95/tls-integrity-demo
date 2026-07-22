@@ -1,7 +1,7 @@
 #include "sha256.h"
 #include <string.h>
 
-//64 prime numbers 
+// the fractional parts of cube roots of first 64 prime numbers
 static const uint32_t K[64] = {
     0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
     0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
@@ -22,7 +22,7 @@ static void sha256_transform(sha256_ctx *ctx, const uint8_t block[64]) {
     uint32_t w[64];
     uint32_t a, b, c, d, e, f, g, h;
 
-    // first 16 words of w[64] & bitwise shift (4*8-bytes -> one 32-bit word by big-endian format)
+    // build w[0..15]: pack 4 bytes into one 32-bit word, big-endian
     // "abcd" -> 0x61 0x62 0x63 0x64 -> 0x61626364
     for (int i = 0; i < 16; i++) {
         w[i] = ((uint32_t)block[i * 4] << 24) |
@@ -31,8 +31,8 @@ static void sha256_transform(sha256_ctx *ctx, const uint8_t block[64]) {
                ((uint32_t)block[i * 4 + 3]);
     }
 
-    // rotr: rotate the bit right-to-left
-    // >>  : shift right-to-left
+    // rotr: rotate right, bits that fall off the right wrap around to the left (no data lost)
+    // >>  : shift right, bits that fall off the right are discarded (zero-filled on the left)
     for (int i = 16; i < 64; i++) {
         uint32_t s0 = rotr(w[i-15], 7) ^ rotr(w[i-15], 18) ^ (w[i-15] >> 3);
         uint32_t s1 = rotr(w[i-2], 17) ^ rotr(w[i-2], 19) ^ (w[i-2] >> 10);

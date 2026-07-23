@@ -35,8 +35,30 @@ static void check_vector(const char *label, const char *msg, size_t msg_len,
     }
 }
 
+
+// combined all processes in one func (using sha256_buffer func)
+static void check_vector_buffer(const char *label, const char *msg, size_t msg_len,
+                                 const char *expected_hex) {
+    uint8_t digest[SHA256_DIGEST_SIZE];
+    char got_hex[SHA256_DIGEST_SIZE * 2 + 1];
+
+    sha256_buffer((const uint8_t *)msg, msg_len, digest);
+
+    for (size_t i = 0; i < SHA256_DIGEST_SIZE; i++) {
+        sprintf(got_hex + i * 2, "%02x", digest[i]);
+    }
+
+    int ok = (strcmp(got_hex, expected_hex) == 0);
+    printf("[%s] %s\n", ok ? "PASS" : "FAIL", label);
+    if (!ok) {
+        printf("       got: %s\n", got_hex);
+        printf("  expected: %s\n", expected_hex);
+        failures++;
+    }
+}
+
 int main(void) {
-    // generate correct sha256 with "echo -n "string" | sha256sum" on linux command
+    // generate correct sha256 with: echo -n "string" | sha256sum
 
     /* FIPS 180-4 test vectors */
     check_vector("empty string", "", 0,
@@ -52,11 +74,14 @@ int main(void) {
     check_vector("56-byte message (2 blocks)", two_block_msg, strlen(two_block_msg),
             "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1");
     
-    // fail test
     const char *four_block_msg = 
         "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopqabcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
     check_vector("4 blocks message", four_block_msg, strlen(four_block_msg),
-            "59f109d9533b2b70e7c3b814a2bd218f78ea5d3714455bc67987cf0d664399ce");
+            "59f109d9533b2b70e7c3b814a2bd218f78ea5d3714455bc67987cf0d664399cf");
+
+    // use buffer func
+    check_vector_buffer("sha256_buffer one-shot \"abc\"", "abc", 3,
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
 
     if (failures == 0) {
         printf("\nAll tests passed.\n");

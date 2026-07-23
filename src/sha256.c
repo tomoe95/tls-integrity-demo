@@ -131,3 +131,12 @@ void sha256_final(sha256_ctx *ctx, uint8_t digest[SHA256_DIGEST_SIZE]) {
         digest[i * 4 + 3] = (uint8_t)(ctx->state[i]);
     }
 }
+
+
+// combine the hash processes in one function
+void sha256_buffer(const uint8_t *data, size_t len, uint8_t digest[SHA256_DIGEST_SIZE]) {
+    sha256_ctx ctx;
+    sha256_init(&ctx);
+    sha256_update(&ctx, data, len);
+    sha256_final(&ctx, digest);
+}

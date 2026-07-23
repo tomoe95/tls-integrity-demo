@@ -1,0 +1,4 @@
+/src/*test*.c
+
+*.pch
+.DS_Store

@@ -141,3 +141,69 @@ HMAC(本実装): 「受け取ったデータの中身が、送信者が意図し
 という役割分担です。TLSが「経路」を、HMACが「中身」を、それぞれ別の
 観点から保証することで、片方が破られても(あるいは対象外のケースでも)
 もう片方でカバーできるようにしています。
+
+## wolfSSLのビルド
+
+TLSクライアント/サーバー部分では、wolfSSLライブラリを実際にビルドして
+静的リンクします。
+
+### Step 0: autotoolsが必要
+
+`./autogen.sh`は内部で`autoreconf`を使うため、autoconf/automake/libtoolが
+インストールされている必要があります。未インストールの場合、以下のような
+エラーになります。
+
+```
+./autogen.sh: line 52: autoreconf: command not found
+```
+
+OSに応じて事前にインストールしてください。
+
+```bash
+# Ubuntu / Debian
+sudo apt update && sudo apt install -y autoconf automake libtool make gcc
+
+# macOS (Homebrew)
+brew install autoconf automake libtool
+
+# Fedora / RHEL
+sudo dnf install -y autoconf automake libtool make gcc
+```
+
+### ビルド手順
+
+```bash
+git clone --depth 1 https://github.com/wolfSSL/wolfssl.git
+cd wolfssl
+./autogen.sh
+./configure --prefix=$PWD/../wolfssl-install --enable-static --disable-shared
+make -j$(nproc)
+make install
+cd ..
+```
+
+成功すると、以下が生成されます。
+
+- `wolfssl-install/include/`  … ヘッダファイル一式
+- `wolfssl-install/lib/libwolfssl.a` … 静的ライブラリ
+
+以降、TLSクライアント/サーバーをビルドする際は、`-I wolfssl-install/include`と
+`wolfssl-install/lib/libwolfssl.a`をコンパイルコマンドに含めます。
+
+wolfSSLのヘッダを使う際は、自分のソースファイルの一番最初
+(他のwolfSSLヘッダより前)に以下を書く必要があります。
+
+```c
+#include <wolfssl/options.h>
+#include <wolfssl/ssl.h>
+```
+
+### .gitignore
+
+`wolfssl/`(クローンしたソース)と`wolfssl-install/`(ビルド成果物)は、
+上記の手順を実行すれば誰でも再現できるため、リポジトリには含めません。
+
+```
+wolfssl/
+wolfssl-install/
+```

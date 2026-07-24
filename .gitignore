@@ -2,3 +2,6 @@
 
 *.pch
 .DS_Store
+
+wolfssl/
+wolfssl-install/

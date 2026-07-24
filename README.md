@@ -207,3 +207,31 @@ wolfSSLのヘッダを使う際は、自分のソースファイルの一番最�
 wolfssl/
 wolfssl-install/
 ```
+
+## デモ用証明書
+
+`certs/server.crt` はデモ用の自己署名証明書です。対になる秘密鍵
+(`certs/server.key`)は公開しないため、リポジトリには含めていません。
+以下のコマンドで自分の環境用に生成してください。
+
+```bash
+mkdir -p certs
+openssl req -x509 -newkey rsa:2048 -nodes \
+  -keyout certs/server.key -out certs/server.crt -days 365 \
+  -subj "/CN=localhost"
+```
+
+| オプション | 意味 |
+|---|---|
+| `-x509` | CAに送らず、自分自身で署名した証明書をその場で作る(自己署名) |
+| `-newkey rsa:2048` | 2048bitのRSA鍵ペア(公開鍵・秘密鍵)を新規生成 |
+| `-nodes` | 秘密鍵にパスワードを掛けない(デモ用。起動のたびの手入力を省略) |
+| `-keyout` / `-out` | それぞれ秘密鍵・証明書の保存先 |
+| `-days 365` | 証明書の有効期限(365日間) |
+| `-subj "/CN=localhost"` | 証明書のSubject。`CN=localhost`のみ指定 |
+
+`CN`(Common Name)は「この証明書がどのホスト向けか」を表す項目で、
+TLSクライアントは接続先ホスト名と証明書のCN(またはSAN)が一致するかを
+検証します。ローカルでの動作確認が目的のため、`CN=localhost`のみで
+十分です(国・組織名などのその他のSubject項目は省略可能で、動作には
+影響しません)。

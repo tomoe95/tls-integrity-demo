@@ -32,7 +32,7 @@ TLSは通信経路そのものを暗号化・認証しますが、以下のよ�
 
 - [x] SHA-256をゼロから実装し、既知のテストベクタで正しさを検証する
 - [x] RFC 2104に基づくHMAC-SHA256を実装し、RFC 4231のテストベクタで検証する
-- [ ] wolfSSLを実際にビルド・リンクし、TLS 1.3でのハンドシェイクを行う
+- [x] wolfSSLを実際にビルド・リンクし、TLS 1.3でのハンドシェイクを行う
 - [ ] TLS通信の上に、自作HMACによるコンテンツ完全性検証を統合する
 - [ ] データが改ざんされた場合に検知できることを実際に確認する
 - [ ] GitHub Actionsで自動ビルド・自動テストを行うCIを整備する
@@ -235,3 +235,81 @@ TLSクライアントは接続先ホスト名と証明書のCN(またはSAN)が�
 検証します。ローカルでの動作確認が目的のため、`CN=localhost`のみで
 十分です(国・組織名などのその他のSubject項目は省略可能で、動作には
 影響しません)。
+
+## tlsモジュール(サーバー/クライアント)
+
+`src/tls_server.c` / `src/tls_client.c` に、wolfSSLを使った最小構成の
+TLSサーバー・クライアントを実装しています。この段階ではファイル送信や
+HMACによる完全性検証はまだ行わず、**TLSハンドシェイクが成立することの
+確認のみ**を目的としています。
+
+### ビルド
+
+```bash
+WSSL=wolfssl-install
+
+# Linux
+gcc -Wall -Wextra -std=c11 -I$WSSL/include \
+  -o src/tls_server src/tls_server.c $WSSL/lib/libwolfssl.a -lm
+gcc -Wall -Wextra -std=c11 -I$WSSL/include \
+  -o src/tls_client src/tls_client.c $WSSL/lib/libwolfssl.a -lm
+
+# macOS (CoreFoundation/Securityフレームワークが追加で必要。後述)
+gcc -Wall -Wextra -std=c11 -I$WSSL/include \
+  -o src/tls_server src/tls_server.c $WSSL/lib/libwolfssl.a \
+  -framework CoreFoundation -framework Security -lm
+gcc -Wall -Wextra -std=c11 -I$WSSL/include \
+  -o src/tls_client src/tls_client.c $WSSL/lib/libwolfssl.a \
+  -framework CoreFoundation -framework Security -lm
+```
+
+### 実行
+
+リポジトリのトップ(`certs/`と`src/`が両方見える階層)で実行します。
+
+```bash
+./src/tls_server &
+./src/tls_client 127.0.0.1
+```
+
+正常に動作すると、サーバー・クライアント双方に以下のようなログが出ます。
+
+```
+[server] TLSハンドシェイク完了 (cipher: TLS_AES_256_GCM_SHA384)
+[client] TLSハンドシェイク完了 (cipher: TLS_AES_256_GCM_SHA384)
+```
+
+### トラブルシューティング
+
+#### `autoreconf: command not found`
+
+`./autogen.sh`の実行に必要なautotools(autoconf/automake/libtool)が
+インストールされていません。「wolfSSLのビルド」セクションの
+「前提: autotoolsが必要」を参照してください。
+
+#### macOSでのリンクエラー(`_CFArrayAppendValue`など)
+
+```
+Undefined symbols for architecture arm64:
+  "_CFArrayAppendValue", referenced from: ...
+  "_SecCertificateCopyData", referenced from: ...
+ld: symbol(s) not found for architecture arm64
+```
+
+macOS版のwolfSSLは、証明書検証にmacOS標準のCoreFoundation/Securityフレームワーク
+(Keychainなど)を利用するコードを含んでいます。ビルドコマンドに
+`-framework CoreFoundation -framework Security` を追加することで解決します
+(上記の「ビルド」セクションのmacOS向けコマンドを参照)。Linux環境では不要です。
+
+#### `CA証明書の読み込みに失敗しました` / `証明書/鍵の読み込みに失敗しました`
+
+原因は主に2つ考えられます。
+
+1. **証明書ファイルの拡張子違い**:コードは`certs/server.crt`(`.crt`)を
+   探しています。`.cert`など別の拡張子で生成していないか確認してください。
+2. **秘密鍵が存在しない**:`certs/server.key`は`.gitignore`対象のためリポジトリに
+   含まれていません。「デモ用証明書」セクションのコマンドで自分の環境用に
+   生成してください。
+3. **実行場所が違う**:相対パス`"certs/server.crt"`はプログラムを実行した場所
+   からの相対パスとして解釈されます。`src/`フォルダの中などから実行すると
+   見つかりません。リポジトリのトップで実行してください。

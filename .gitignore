@@ -1,4 +1,9 @@
-/src/*test*.c
+/src/tls_server
+/src/tls_client
+
+tests/test_sha256
+tests/test_hmac
+tests/test_proto
 
 *.pch
 .DS_Store

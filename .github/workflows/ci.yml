@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y autoconf automake libtool make gcc openssl
+
+      - name: Build wolfSSL
+        run: |
+          git clone --depth 1 https://github.com/wolfSSL/wolfssl.git
+          cd wolfssl
+          ./autogen.sh
+          ./configure --prefix="$GITHUB_WORKSPACE/wolfssl-install" --enable-static --disable-shared
+          make -j"$(nproc)"
+          make install
+
+      - name: Build and run unit tests (sha256, hmac, proto)
+        run: |
+          gcc -Wall -Wextra -std=c11 -o tests/test_sha256 tests/test_sha256.c src/sha256.c
+          ./tests/test_sha256
+
+          gcc -Wall -Wextra -std=c11 -Isrc -o tests/test_hmac tests/test_hmac.c src/hmac.c src/sha256.c
+          ./tests/test_hmac
+
+          gcc -Wall -Wextra -std=c11 -o tests/test_proto tests/test_proto.c src/proto.c
+          ./tests/test_proto
+
+      - name: Build TLS server and client
+        run: |
+          WSSL="$GITHUB_WORKSPACE/wolfssl-install"
+          gcc -Wall -Wextra -std=c11 -I"$WSSL/include" -Isrc \
+            -o src/tls_server src/tls_server.c src/hmac.c src/sha256.c src/proto.c \
+            "$WSSL/lib/libwolfssl.a" -lm
+          gcc -Wall -Wextra -std=c11 -I"$WSSL/include" -Isrc \
+            -o src/tls_client src/tls_client.c src/hmac.c src/sha256.c src/proto.c \
+            "$WSSL/lib/libwolfssl.a" -lm
+
+      - name: Generate demo cert and HMAC key
+        run: |
+          mkdir -p certs
+          openssl req -x509 -newkey rsa:2048 -nodes \
+            -keyout certs/server.key -out certs/server.crt -days 365 \
+            -subj "/CN=localhost"
+          openssl rand -out certs/hmac.key 32
+          echo "test payload for CI" > /tmp/payload.txt
+
+      - name: Integration test - normal case (expect OK)
+        run: |
+          ./src/tls_server /tmp/payload.txt > server.log 2>&1 &
+          SERVER_PID=$!
+          sleep 1
+          ./src/tls_client 127.0.0.1 | tee client.log
+          wait $SERVER_PID
+          echo "--- server.log ---"
+          cat server.log
+          grep -q "\[OK\] integrity verified" client.log
+
+      - name: Integration test - tampered case (expect NG)
+        run: |
+          ./src/tls_server /tmp/payload.txt tamper > server_tamper.log 2>&1 &
+          SERVER_PID=$!
+          sleep 1
+          ./src/tls_client 127.0.0.1 | tee client_tamper.log
+          wait $SERVER_PID
+          grep -q "\[NG\] tampering detected" client_tamper.log

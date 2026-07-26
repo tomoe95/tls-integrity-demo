@@ -82,6 +82,15 @@ int main(int argc, char *argv[]) {
     uint8_t tag[HMAC_SHA256_SIZE];
     hmac_sha256(hmac_key, HMAC_KEY_LEN, payload, payload_len, tag);
 
+    /* for debug */
+    fprintf(stderr, "[DEBUG server] key=");
+    for (int i = 0; i < HMAC_KEY_LEN; i++) fprintf(stderr, "%02x", hmac_key[i]);
+    fprintf(stderr, " payload_len=%zu payload=", payload_len);
+    for (size_t i = 0; i < payload_len; i++) fprintf(stderr, "%02x", payload[i]);
+    fprintf(stderr, " tag=");
+    for (int i = 0; i < HMAC_SHA256_SIZE; i++) fprintf(stderr, "%02x", tag[i]);
+    fprintf(stderr, "\n");
+
     // (destroy the process below happens after the tag was already computed on the
     //  original data, so the sent tag will no longer match the tampered payload)
     if (tamper) {
@@ -127,7 +136,6 @@ int main(int argc, char *argv[]) {
 
     // destroy 1 byte of payload; the tag above was computed before this, so it will
     // no longer match once the client recomputes it
-payload[0] ^= 0xFF;
     if (tamper && payload_len > 0) {
         payload[0] ^= 0xFF;          // flip every bit of the first byte (0xFF XOR anything inverts all 8 bits)
     }

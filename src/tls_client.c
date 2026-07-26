@@ -115,6 +115,17 @@ int main(int argc, char *argv[]) {
     uint8_t calc_tag[HMAC_SHA256_SIZE];
     hmac_sha256(hmac_key, HMAC_KEY_LEN, payload, payload_len, calc_tag);
  
+    /* for debug */
+    fprintf(stderr, "[DEBUG client] key=");
+    for (int i = 0; i < HMAC_KEY_LEN; i++) fprintf(stderr, "%02x", hmac_key[i]);
+    fprintf(stderr, " payload_len=%u payload=", payload_len);
+    for (size_t i = 0; i < payload_len; i++) fprintf(stderr, "%02x", payload[i]);
+    fprintf(stderr, " recv_tag=");
+    for (int i = 0; i < HMAC_SHA256_SIZE; i++) fprintf(stderr, "%02x", recv_tag[i]);
+    fprintf(stderr, " calc_tag=");
+    for (int i = 0; i < HMAC_SHA256_SIZE; i++) fprintf(stderr, "%02x", calc_tag[i]);
+    fprintf(stderr, "\n");
+
     printf("[client] %u bytes受信、HMAC検証を実行します\n", payload_len);
  
     if (consttime_eq(recv_tag, calc_tag, HMAC_SHA256_SIZE)) {

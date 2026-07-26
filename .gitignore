@@ -7,3 +7,4 @@ wolfssl/
 wolfssl-install/
 
 certs/server.key
+certs/hmac.key

@@ -313,3 +313,13 @@ macOS版のwolfSSLは、証明書検証にmacOS標準のCoreFoundation/Security�
 3. **実行場所が違う**:相対パス`"certs/server.crt"`はプログラムを実行した場所
    からの相対パスとして解釈されます。`src/`フォルダの中などから実行すると
    見つかりません。リポジトリのトップで実行してください。
+
+   ### HMAC共有鍵
+
+`certs/hmac.key` はサーバー・クライアント間で共有するHMAC用の鍵です。
+`certs/server.key`と同様、リポジトリには含めていません。以下のコマンドで
+生成してください。
+
+```bash
+openssl rand -out certs/hmac.key 32
+```

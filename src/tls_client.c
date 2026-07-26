@@ -9,11 +9,45 @@
 #include <wolfssl/options.h>
 #include <wolfssl/ssl.h>
 
+#include "hmac.h"
+#include "proto.h"
+
 #define TCP_PORT 11111
+
+// wolfSSL_read may return fewer bytes than requested, just like wolfSSL_write on the server side;
+// loop until `len` bytes are received <-> send_all in tls_server.c
+static void recv_all(WOLFSSL *ssl, uint8_t *buf, size_t len) {
+    size_t got = 0;
+    while (got < len) {
+        int n = wolfSSL_read(ssl, buf + got, (int)(len - got));
+        if (n <= 0) {
+            fprintf(stderr, "wolfSSL_read error: %d\n",
+                    wolfSSL_get_error(ssl, n));
+            exit(1);
+        }
+        got += (size_t)n;
+    }
+}
+ 
+// prevent timing attacks (an adversary could otherwise guess the correct tag byte-by-byte
+//by measuring how long the comparison takes)
+static int consttime_eq(const uint8_t *a, const uint8_t *b, size_t len) {
+    uint8_t diff = 0;
+    for (size_t i = 0; i < len; i++) diff |= a[i] ^ b[i];
+    // a[i] ^ b[i] is 0 only when the bytes match; OR-ing into diff means diff stays 0 only if EVERY bytes matched
+    return diff = 0;
+}
 
 // user can set the specific host server or default
 int main(int argc, char *argv[]) {
     const char *host = (argc >= 2) ? argv[1] : "127.0.0.1";
+
+    // load certs/hmac.key (symmetric key)
+    uint8_t hmac_key[HMAC_KEY_LEN];
+    if (load_hmac_key(hmac_key) != 0) {
+        fprintf(stderr, "HMAC鍵の読み込みに失敗しました(certs/hmac.keyを確認してください)\n");
+        return 1;
+    }
 
     wolfSSL_Init();
 
@@ -57,6 +91,39 @@ int main(int argc, char *argv[]) {
     printf("[client] TLSハンドシェイク完了 (cipher: %s)\n",
            wolfSSL_get_cipher(ssl));
 
+    // convert length from network byte order to host byte order (ntohl) <-> server used htonl
+    uint32_t len_be;
+    recv_all(ssl, (uint8_t *)&len_be, sizeof(len_be)); // 1. receive the length of 4 bytes
+    uint32_t payload_len = ntohl(len_be);              // 2. network style to host style
+ 
+    // prevent from DoS
+    if (payload_len > MAX_PAYLOAD) {
+        fprintf(stderr, "payload too large (%u bytes)\n", payload_len);
+        return 1;
+    }
+ 
+    // allocate the memory for the payload, receive it
+    uint8_t *payload = malloc(payload_len);
+    if (!payload) { fprintf(stderr, "malloc failed\n"); return 1; }
+    recv_all(ssl, payload, payload_len);
+ 
+    // receive 32 bytes HMAC tag
+    uint8_t recv_tag[HMAC_SHA256_SIZE];
+    recv_all(ssl, recv_tag, HMAC_SHA256_SIZE);
+ 
+    // calc HMAC tag from payload
+    uint8_t calc_tag[HMAC_SHA256_SIZE];
+    hmac_sha256(hmac_key, HMAC_KEY_LEN, payload, payload_len, calc_tag);
+ 
+    printf("[client] %u bytes受信、HMAC検証を実行します\n", payload_len);
+ 
+    if (consttime_eq(recv_tag, calc_tag, HMAC_SHA256_SIZE)) {
+        printf("[OK] integrity verified — データは改ざんされていません\n");
+    } else {
+        printf("[NG] tampering detected — データが改ざんされています\n");
+    }
+
+    free(payload);
     wolfSSL_shutdown(ssl);
     wolfSSL_free(ssl);
     close(fd);

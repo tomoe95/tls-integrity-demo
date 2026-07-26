@@ -58,10 +58,13 @@ static void send_all(WOLFSSL *ssl, const uint8_t *buf, size_t len) {
 // get the file path in the second command line argument when it runs
 int main(int argc, char *argv[]) {
     if (argc < 2) {
-        fprintf(stderr, "usage: %s <file to serve>\n", argv[0]);
+        fprintf(stderr, "usage: %s <file to serve> [tamper]\n", argv[0]);
         return 1;
     }
- 
+
+    // tamper = 1 if a second argument "tamper" was given, otherwise 0
+    int tamper = (argc >= 3 && strcmp(argv[2], "tamper") == 0);
+
     FILE *fp = fopen(argv[1], "rb");
     if (!fp) { perror("fopen"); return 1; }
     uint8_t payload[MAX_PAYLOAD];                            // max 1MB
@@ -75,10 +78,15 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // compute the HMAC tag for the payload (the client will verify this to detect tanpering)
+    // compute the HMAC tag for the payload (the client will verify this to detect tampering)
     uint8_t tag[HMAC_SHA256_SIZE];
     hmac_sha256(hmac_key, HMAC_KEY_LEN, payload, payload_len, tag);
 
+    // (destroy the process below happens after the tag was already computed on the
+    //  original data, so the sent tag will no longer match the tampered payload)
+    if (tamper) {
+        printf("[server] --tamper指定: 送信直前にペイロードを１バイト破壊します。\n");
+    }
 
     // initialize the wolfSSL library
     wolfSSL_Init();
@@ -116,6 +124,13 @@ int main(int argc, char *argv[]) {
 
     printf("[server] TLSハンドシェイク完了 (cipher: %s)\n",
            wolfSSL_get_cipher(ssl));
+
+    // destroy 1 byte of payload; the tag above was computed before this, so it will
+    // no longer match once the client recomputes it
+payload[0] ^= 0xFF;
+    if (tamper && payload_len > 0) {
+        payload[0] ^= 0xFF;          // flip every bit of the first byte (0xFF XOR anything inverts all 8 bits)
+    }
 
     // execute send_all func 
     uint32_t len_be = htonl((uint32_t)payload_len);

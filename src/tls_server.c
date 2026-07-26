@@ -9,6 +9,9 @@
 #include <wolfssl/options.h>
 #include <wolfssl/ssl.h>
 
+#include "hmac.h"
+#include "proto.h"
+
 #define TCP_PORT 11111
 
 // the receiver of TCP connection
@@ -37,8 +40,46 @@ static int make_listen_socket(int port) {
     return fd;
 }
 
+// looping to send bytes while recording the left bytes until 0
+static void send_all(WOLFSSL *ssl, const uint8_t *buf, size_t len) {
+    size_t sent = 0;
+    while (sent < len) {
+        // wolfSSL_write not always sends given bytes. (e.g., given bytes 1000 -> send 600 bytes)
+        int n = wolfSSL_write(ssl, buf + sent, (int)(len - sent));
+        if (n <= 0) {
+            fprintf(stderr, "wolfSSL_write error: %d\n",
+                    wolfSSL_get_error(ssl, n));
+            exit(1);
+        }
+        sent += (size_t)n;
+    }
+}
 
-int main(void) {
+// get the file path in the second command line argument when it runs
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
+        fprintf(stderr, "usage: %s <file to serve>\n", argv[0]);
+        return 1;
+    }
+ 
+    FILE *fp = fopen(argv[1], "rb");
+    if (!fp) { perror("fopen"); return 1; }
+    uint8_t payload[MAX_PAYLOAD];                            // max 1MB
+    size_t payload_len = fread(payload, 1, MAX_PAYLOAD, fp); // bytes actially read (truncated at MAX_PAYLOAD if the file is larger)
+    fclose(fp);
+ 
+    // read hmac key 
+    uint8_t hmac_key[HMAC_KEY_LEN];
+    if (load_hmac_key(hmac_key) != 0) {
+        fprintf(stderr, "HMAC鍵の読み込みに失敗しました(certs/hmac.keyを確認してください)\n");
+        return 1;
+    }
+
+    // compute the HMAC tag for the payload (the client will verify this to detect tanpering)
+    uint8_t tag[HMAC_SHA256_SIZE];
+    hmac_sha256(hmac_key, HMAC_KEY_LEN, payload, payload_len, tag);
+
+
     // initialize the wolfSSL library
     wolfSSL_Init();
     
@@ -75,6 +116,14 @@ int main(void) {
 
     printf("[server] TLSハンドシェイク完了 (cipher: %s)\n",
            wolfSSL_get_cipher(ssl));
+
+    // execute send_all func 
+    uint32_t len_be = htonl((uint32_t)payload_len);
+    send_all(ssl, (uint8_t *)&len_be, sizeof(len_be)); // send payload length (big-endian), so the receiver knows how many bytes to expect
+    send_all(ssl, payload, payload_len);               // send payload (file contents)
+    send_all(ssl, tag, HMAC_SHA256_SIZE);              // send HMAC tag
+ 
+    printf("[server] %zu bytes + HMACタグを送信しました\n", payload_len);
 
     wolfSSL_shutdown(ssl);
     wolfSSL_free(ssl);

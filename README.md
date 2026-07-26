@@ -1,11 +1,40 @@
 # tls-integrity-demo
+![CI](https://github.com/tomoe95/tls-integrity-demo/actions/workflows/ci.yml/badge.svg)
 
 wolfSSLを用いたTLS通信の上に、アプリケーション層でのデータ完全性検証を
 組み合わせたクライアント/サーバーのデモプロジェクトです。
 
+## 全体アーキテクチャ
+ 
+```
+[送信側: tls_server]                      [受信側: tls_client]
+  ファイル読込
+       │
+  HMACタグ計算 (元データに対して) ─┐
+       │                        │
+  ==== TLS 1.3 ハンドシェイク (wolfSSL) ====
+       │                        │
+  [長さ] → 送信 ──────────────→ 受信 → [長さ]
+       │                        │       │
+       │                     上限チェック(DoS対策)
+  [payload] → 送信 ───────────→ 受信 → [payload]
+       │                        │
+  [tag] → 送信 ────────────────→ 受信 → [recv_tag]
+                                        │
+                          自前でHMAC再計算 → [calc_tag]
+                                        │
+                     定数時間比較(consttime_eq)
+                                        │
+                          [OK] 一致 / [NG] 改ざん検知
+```
+ 
+- **TLS層(wolfSSL)**：通信経路そのものを暗号化・認証する
+- **HMAC層(自作)**：受信したデータの中身自体が、送信者の意図通りかを検証する
+の2層構造で、多層防御(defense-in-depth)を実現しています。
+
 ## 動機
 
-現在、大学の卒業研究(TDK)で、機械学習データセットに対するデータポイズニング
+現在、大学の卒業研究で、機械学習データセットに対するデータポイズニング
 攻撃への対策として、コンテンツをMinHashで指紋化し、Ed25519で署名し、
 Merkleツリーで集約するという検証パイプラインを研究しています。
 
@@ -33,9 +62,9 @@ TLSは通信経路そのものを暗号化・認証しますが、以下のよ�
 - [x] SHA-256をゼロから実装し、既知のテストベクタで正しさを検証する
 - [x] RFC 2104に基づくHMAC-SHA256を実装し、RFC 4231のテストベクタで検証する
 - [x] wolfSSLを実際にビルド・リンクし、TLS 1.3でのハンドシェイクを行う
-- [ ] TLS通信の上に、自作HMACによるコンテンツ完全性検証を統合する
-- [ ] データが改ざんされた場合に検知できることを実際に確認する
-- [ ] GitHub Actionsで自動ビルド・自動テストを行うCIを整備する
+- [x] TLS通信の上に、自作HMACによるコンテンツ完全性検証を統合する
+- [x] データが改ざんされた場合に検知できることを実際に確認する
+- [x] GitHub Actionsで自動ビルド・自動テストを行うCIを整備する
 
 ## 進め方
 
@@ -323,3 +352,28 @@ macOS版のwolfSSLは、証明書検証にmacOS標準のCoreFoundation/Security�
 ```bash
 openssl rand -out certs/hmac.key 32
 ```
+
+## 動作確認結果
+ 
+### 正常系
+ 
+```
+$ ./src/tls_server payload.txt &
+$ ./src/tls_client 127.0.0.1
+[client] TLSハンドシェイク完了 (cipher: TLS_AES_256_GCM_SHA384)
+[client] 29 bytes受信、HMAC検証を実行します
+[OK] integrity verified — データは改ざんされていません
+```
+ 
+### 改ざん検知
+ 
+```
+$ ./src/tls_server payload.txt tamper &
+$ ./src/tls_client 127.0.0.1
+[client] TLSハンドシェイク完了 (cipher: TLS_AES_256_GCM_SHA384)
+[client] 29 bytes受信、HMAC検証を実行します
+[NG] tampering detected — データが改ざんされています
+```
+### CI
+ 
+GitHub Actions上で、上記の正常系・改ざん系を含む全テスト(SHA-256単体テスト、HMAC単体テスト、鍵読み込みテスト、TLS統合テスト)を自動実行し、pushのたびに検証しています。

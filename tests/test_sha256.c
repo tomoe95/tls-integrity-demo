@@ -10,17 +10,17 @@ static void print_hex(const uint8_t *d, size_t n) {
 
 static void check_vector(const char *label, const char *msg, size_t msg_len,
                           const char *expected_hex) {
-    sha256_ctx ctx;
-    uint8_t digest[SHA256_DIGEST_SIZE]; // result of calc (32 bytes raw)
-    char got_hex[SHA256_DIGEST_SIZE * 2 + 1];
+    ts_sha256_ctx ctx;
+    uint8_t digest[TS_SHA256_DIGEST_SIZE]; // result of calc (32 bytes raw)
+    char got_hex[TS_SHA256_DIGEST_SIZE * 2 + 1];
 
     // run the hash: (init -> update -> final)
-    sha256_init(&ctx);
-    sha256_update(&ctx, (const uint8_t *)msg, msg_len);
-    sha256_final(&ctx, digest);
+    ts_sha256_init(&ctx);
+    ts_sha256_update(&ctx, (const uint8_t *)msg, msg_len);
+    ts_sha256_final(&ctx, digest);
 
     // each byte -> 2 digits hex (got_hex[i..i+1])
-    for (size_t i = 0; i < SHA256_DIGEST_SIZE; i++) {
+    for (size_t i = 0; i < TS_SHA256_DIGEST_SIZE; i++) {
         sprintf(got_hex + i * 2, "%02x", digest[i]);
     }
 
@@ -29,22 +29,22 @@ static void check_vector(const char *label, const char *msg, size_t msg_len,
 
     printf("[%s] %s\n", ok ? "PASS" : "FAIL", label);
     if (!ok) {
-        printf("       got: "); print_hex(digest, SHA256_DIGEST_SIZE); printf("\n");
+        printf("       got: "); print_hex(digest, TS_SHA256_DIGEST_SIZE); printf("\n");
         printf("  expected: %s\n", expected_hex);
         failures++;
     }
 }
 
 
-// combined all processes in one func (using sha256_buffer func)
+// combined all processes in one func (using ts_sha256_buffer func)
 static void check_vector_buffer(const char *label, const char *msg, size_t msg_len,
                                  const char *expected_hex) {
-    uint8_t digest[SHA256_DIGEST_SIZE];
-    char got_hex[SHA256_DIGEST_SIZE * 2 + 1];
+    uint8_t digest[TS_SHA256_DIGEST_SIZE];
+    char got_hex[TS_SHA256_DIGEST_SIZE * 2 + 1];
 
-    sha256_buffer((const uint8_t *)msg, msg_len, digest);
+    ts_sha256_buffer((const uint8_t *)msg, msg_len, digest);
 
-    for (size_t i = 0; i < SHA256_DIGEST_SIZE; i++) {
+    for (size_t i = 0; i < TS_SHA256_DIGEST_SIZE; i++) {
         sprintf(got_hex + i * 2, "%02x", digest[i]);
     }
 
@@ -68,7 +68,7 @@ int main(void) {
         "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
 
     /* 56 bytes: spans two 64-byte blocks after padding, exercises the
-       while-loop in sha256_update across multiple blocks */
+       while-loop in ts_sha256_update across multiple blocks */
     const char *two_block_msg =
         "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
     check_vector("56-byte message (2 blocks)", two_block_msg, strlen(two_block_msg),
@@ -80,7 +80,7 @@ int main(void) {
             "59f109d9533b2b70e7c3b814a2bd218f78ea5d3714455bc67987cf0d664399cf");
 
     // use buffer func
-    check_vector_buffer("sha256_buffer one-shot \"abc\"", "abc", 3,
+    check_vector_buffer("ts_sha256_buffer one-shot \"abc\"", "abc", 3,
         "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
 
     if (failures == 0) {

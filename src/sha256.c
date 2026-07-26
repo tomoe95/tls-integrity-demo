@@ -20,7 +20,7 @@ static uint32_t rotr(uint32_t x, uint32_t n) {
 }
 
 
-static void sha256_transform(sha256_ctx *ctx, const uint8_t block[64]) {
+static void ts_sha256_transform(ts_sha256_ctx *ctx, const uint8_t block[64]) {
     uint32_t w[64];
     uint32_t a, b, c, d, e, f, g, h;
 
@@ -69,7 +69,7 @@ static void sha256_transform(sha256_ctx *ctx, const uint8_t block[64]) {
 }
 
 // fractional part of suqare roots of first 8 prime numbers (2, 3, 5, 7, 11, 13, 17, 19)
-void sha256_init(sha256_ctx *ctx) {
+void ts_sha256_init(ts_sha256_ctx *ctx) {
     ctx->state[0] = 0x6a09e667; ctx->state[1] = 0xbb67ae85;
     ctx->state[2] = 0x3c6ef372; ctx->state[3] = 0xa54ff53a;
     ctx->state[4] = 0x510e527f; ctx->state[5] = 0x9b05688c;
@@ -79,9 +79,9 @@ void sha256_init(sha256_ctx *ctx) {
 }
 
 
-// every 64 bytes, call sha256_transform
-void sha256_update(sha256_ctx *ctx, const uint8_t *data, size_t len) {
-    // track total message length in bits (used later for padding in sha256_final)
+// every 64 bytes, call ts_sha256_transform
+void ts_sha256_update(ts_sha256_ctx *ctx, const uint8_t *data, size_t len) {
+    // track total message length in bits (used later for padding in ts_sha256_final)
     ctx->bitlen += (uint64_t)len * 8;
 
     while (len > 0) {
@@ -94,22 +94,22 @@ void sha256_update(sha256_ctx *ctx, const uint8_t *data, size_t len) {
         data += n;        // go forward the pointer to the data that is not copied yet
         len -= n;         // reduce the amount of length that is not copied yet
 
-        // call sha256_transform every 64 bytes & reset buffer
+        // call ts_sha256_transform every 64 bytes & reset buffer
         if (ctx->buflen == 64) {
-            sha256_transform(ctx, ctx->buffer);
+            ts_sha256_transform(ctx, ctx->buffer);
             ctx->buflen = 0;
         }
     }
 }
 
 // for the last leftover buffer
-void sha256_final(sha256_ctx *ctx, uint8_t digest[SHA256_DIGEST_SIZE]) {
+void ts_sha256_final(ts_sha256_ctx *ctx, uint8_t digest[TS_SHA256_DIGEST_SIZE]) {
     uint64_t bitlen = ctx->bitlen;
     uint8_t pad = 0x80; // == 10000000
-    sha256_update(ctx, &pad, 1); // add the flag number (pad) in the last of the data
+    ts_sha256_update(ctx, &pad, 1); // add the flag number (pad) in the last of the data
     uint8_t zero = 0x00;
     while (ctx->buflen != 56) { // 56 = 64 - 8(reserve 8 bytes for the length field, written later)
-        sha256_update(ctx, &zero, 1);
+        ts_sha256_update(ctx, &zero, 1);
     }
 
     // transform bitlen(64 bits) -> 8 bytes big-endian
@@ -121,7 +121,7 @@ void sha256_final(sha256_ctx *ctx, uint8_t digest[SHA256_DIGEST_SIZE]) {
     // store the 8 bytes big-endian from 56 bytes-th
     memcpy(ctx->buffer + ctx->buflen, lenbytes, 8);
     ctx->buflen += 8;
-    sha256_transform(ctx, ctx->buffer);
+    ts_sha256_transform(ctx, ctx->buffer);
 
     // 8 * 32bits -> 32 bytes big-endian
     for (int i = 0; i < 8; i++) {
@@ -134,9 +134,9 @@ void sha256_final(sha256_ctx *ctx, uint8_t digest[SHA256_DIGEST_SIZE]) {
 
 
 // combine the hash processes in one function
-void sha256_buffer(const uint8_t *data, size_t len, uint8_t digest[SHA256_DIGEST_SIZE]) {
-    sha256_ctx ctx;
-    sha256_init(&ctx);
-    sha256_update(&ctx, data, len);
-    sha256_final(&ctx, digest);
+void ts_sha256_buffer(const uint8_t *data, size_t len, uint8_t digest[TS_SHA256_DIGEST_SIZE]) {
+    ts_sha256_ctx ctx;
+    ts_sha256_init(&ctx);
+    ts_sha256_update(&ctx, data, len);
+    ts_sha256_final(&ctx, digest);
 }

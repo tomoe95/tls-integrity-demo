@@ -52,7 +52,7 @@ int main(void) {
             "773ea91e36800e46854db8ebd09181a72959098b3ef8c122d9635514ced565fe");
 
     /* RFC 4231 Test Case 6: key length (131) > block size (64)
-       exercises the sha256_buffer(key) branch inside hmac_sha256 */
+       exercises the ts_sha256_buffer(key) branch inside hmac_sha256 */
     uint8_t key6[131];
     memset(key6, 0xaa, sizeof(key6));
     const char *msg6 = "Test Using Larger Than Block-Size Key - Hash Key First";

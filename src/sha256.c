@@ -68,7 +68,7 @@ static void ts_sha256_transform(ts_sha256_ctx *ctx, const uint8_t block[64]) {
     ctx->state[4] += e; ctx->state[5] += f; ctx->state[6] += g; ctx->state[7] += h;
 }
 
-// fractional part of suqare roots of first 8 prime numbers (2, 3, 5, 7, 11, 13, 17, 19)
+// fractional part of square roots of first 8 prime numbers (2, 3, 5, 7, 11, 13, 17, 19)
 void ts_sha256_init(ts_sha256_ctx *ctx) {
     ctx->state[0] = 0x6a09e667; ctx->state[1] = 0xbb67ae85;
     ctx->state[2] = 0x3c6ef372; ctx->state[3] = 0xa54ff53a;

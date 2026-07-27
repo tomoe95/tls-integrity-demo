@@ -12,7 +12,6 @@
 #include "hmac.h"
 #include "proto.h"
 
-#define TCP_PORT 11111
 
 // the receiver of TCP connection
 static int make_listen_socket(int port) {

@@ -12,7 +12,6 @@
 #include "hmac.h"
 #include "proto.h"
 
-#define TCP_PORT 11111
 
 // wolfSSL_read may return fewer bytes than requested, just like wolfSSL_write on the server side;
 // loop until `len` bytes are received <-> send_all in tls_server.c
